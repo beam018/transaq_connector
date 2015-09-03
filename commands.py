@@ -11,7 +11,7 @@
     Синхронные вспомогательные команды помечены отдельно.
 """
 import ctypes, logging
-import platform, os
+import platform, os, sys
 import lxml.etree as et
 from structures import *
 log = logging.getLogger("transaq.connector")
@@ -21,6 +21,7 @@ global_handler = None
 path = os.path.dirname(__file__) + os.sep
 txml_dll = ctypes.WinDLL(path + ("txmlconnector64.dll" if platform.machine() == 'AMD64' else 'txmlconnector.dll') )
 connected = False
+encoding = sys.stdout.encoding
 
 
 @callback_func
@@ -33,10 +34,10 @@ def callback(msg):
     :return:
         True если все обработал.
     """
-    obj = parse(msg)
+    obj = parse(msg.decode('utf8'))
     if isinstance(obj, Error):
         log.error(u"Чета не то ваще: %s" % obj.text)
-        raise TransaqException(obj.text)
+        raise TransaqException(obj.text.encode(encoding))
     elif isinstance(obj, ServerStatus):
         log.info(u"Соединен с серваком: %s" % obj.connected)
         if obj.connected == 'error':
@@ -113,7 +114,7 @@ def __get_message(ptr):
     # Достать сообщение из нативной памяти.
     msg = ctypes.string_at(ptr)
     txml_dll.FreeMemory(ptr)
-    return msg
+    return unicode(msg, 'utf8')
 
 
 def __elem(tag, text):
@@ -128,7 +129,7 @@ def __send_command(cmd):
     msg = __get_message(txml_dll.SendCommand(cmd))
     err = Error.parse(msg)
     if err.text:
-        raise TransaqException(err.text)
+        raise TransaqException(err.text.encode(encoding))
     else:
         return CmdResult.parse(msg)
 
@@ -146,7 +147,7 @@ def initialize(logdir, loglevel, msg_handler):
     err = txml_dll.Initialize(logdir + "\0", loglevel)
     if err != 0:
         msg = __get_message(err)
-        raise TransaqException(Error.parse(msg))
+        raise TransaqException(Error.parse(msg).text.encode(encoding))
     if not txml_dll.SetCallback(callback):
         raise TransaqException("Callback was not installed")
 
@@ -162,7 +163,7 @@ def uninitialize():
     err = txml_dll.UnInitialize()
     if err != 0:
         msg = __get_message(err)
-        raise TransaqException(Error.parse(msg))
+        raise TransaqException(Error.parse(msg).text.encode(encoding))
 
 
 def connect(login, password, server, min_delay=100):
