@@ -9,3 +9,4 @@ txmlconnector*.dll
 .env
 *.pyc
 logs
+*.stackdump
